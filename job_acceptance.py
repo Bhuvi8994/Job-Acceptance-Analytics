@@ -1,58 +1,119 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import LabelEncoder
 
-df = pd.read_csv(r"C:\Users\Bhuvaneswari\Downloads\Python\HR_Job_Placement_Dataset.csv")
+st.title("Job Placement Prediction App")
 
-st.title("Job Acceptance Analytics Dashboard")
+# -------------------------------
+# Step 1: Load Dataset
+# -------------------------------
+df = pd.read_csv(r"\Users\Bhuvaneswari\Downloads\Python\HR_Job_Placement_Dataset.csv")
 
+df.columns = df.columns.str.strip().str.lower()
+df = df.dropna()
+
+# Convert target
 df["status"] = df["status"].map({
     "Not Placed": 0,
     "Placed": 1
 })
 
-# Total candidates
-total_candidates = len(df)
+le = LabelEncoder()
 
-# Placement Rate
-placement_rate = (df["status"].mean()) * 100
+for col in df.select_dtypes(include='object').columns:
+    df[col] = le.fit_transform(df[col])
 
-# Job Acceptance Rate
-job_acceptance_rate = placement_rate
+features = ['age_years',
+            'ssc_percentage',
+            'hsc_percentage',
+       'degree_percentage',
+       'certifications_count',
+       'relevant_experience',
+       'previous_ctc_lpa',
+       'expected_ctc_lpa',
+       'job_role_match',
+       'competition_level',
+       'notice_period_days',
+       'employment_gap_months',
+       'status', 
+       'technical_score',
+       'aptitude_score',
+       'communication_score',
+       'skills_match_percentage',
+       'years_of_experience'
+]
 
-# Interview Score
-df["interview_score"] = (
-    df["technical_score"] +
-    df["aptitude_score"] +
-    df["communication_score"]
-) 
+X = df[features]
+y = df["status"]
 
-avg_interview_score = df["interview_score"].mean()
+# Scale data
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-# Average Skills Match
-avg_skills_match = df["skills_match_percentage"].mean()
+# Train model
+model = LogisticRegression()
+model.fit(X_scaled, y)
 
-# Offer Dropout Rate
-offer_dropout_rate = (df["status"] == 0).mean() * 100
+# -------------------------------
+# Step 2: User Input
+# -------------------------------
+st.subheader("Enter Candidate Details")
 
-# High Risk Candidates (skills < 50%)
-high_risk_candidates = (
-    df["skills_match_percentage"] < 50
-).mean() * 100
+age = st.slider("Age", 18, 60)
+ssc = st.slider("SSC Percentage", 0, 100)
+hsc = st.slider("HSC Percentage", 0, 100)
+degree = st.slider("Degree Percentage", 0, 100)
+cert = st.slider("Certifications Count", 0, 10)
+relevant_exp = st.selectbox("Relevant Experience", [0, 1])
+prev_ctc = st.number_input("Previous CTC (LPA)", 0.0, 50.0)
+exp_ctc = st.number_input("Expected CTC (LPA)", 0.0, 50.0)
+job_match = st.slider("Job Role Match %", 0, 100)
+competition = st.selectbox("Competition Level", df['competition_level'].unique())
+notice = st.slider("Notice Period (Days)", 0, 180)
+gap = st.slider("Employment Gap (Months)", 0, 60)
+tech = st.slider("Technical Score", 0, 100)
+apt = st.slider("Aptitude Score", 0, 100)
+comm = st.slider("Communication Score", 0, 100)
+skills = st.slider("Skills Match %", 0, 100)
+exp = st.slider("Years of Experience", 0, 10)
 
+# -------------------------------
+# Step 3: Prediction
+# -------------------------------   
+if st.button("Predict Placement"):
 
+    input_data = np.array([[ 
+        age,
+        ssc,
+        hsc,
+        degree,
+        cert,
+        relevant_exp,
+        prev_ctc,
+        exp_ctc,
+        job_match,
+        competition,
+        notice,
+        gap,
+        0,   
+        tech,
+        apt,
+        comm,
+        skills,
+        exp
+    ]])
 
-col1, col2, col3 = st.columns(3)
+    input_scaled = scaler.transform(input_data)
 
-col1.metric("Total Candidates", total_candidates)
-col2.metric("Placement Rate (%)", round(placement_rate,2))
-col3.metric("Job Acceptance Rate (%)", round(job_acceptance_rate,2))
+    prediction = model.predict(input_scaled)
 
+    if prediction[0] == 1:
+        st.success("🎉 Candidate will be Placed")
+    else:
+        st.error("⚠️ Candidate Not Placed")
 
-col4, col5, col6 = st.columns(3)
-
-col4.metric("Average Interview Score", round(avg_interview_score,2))
-col5.metric("Average Skills Match %", round(avg_skills_match,2))
-col6.metric("Offer Dropout Rate %", round(offer_dropout_rate,2))
-
-
-st.metric("High Risk Candidate %", round(high_risk_candidates,2))
+    prob = model.predict_proba(input_scaled)[0][1]
+    st.info(f"Placement Probability: {round(prob*100,2)} %")
